@@ -1,0 +1,41 @@
+{
+  "name": "puppeteer-debugger",
+  "version": "1.0.0",
+  "description": "A modern web UI debugger for Chrome DevTools Protocol with dual-mode JavaScript execution",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node server/index.js",
+    "test": "node tests/integration.test.js"
+  },
+  "keywords": [
+    "puppeteer",
+    "chrome",
+    "debugger",
+    "cdp",
+    "websocket",
+    "devtools",
+    "javascript",
+    "web-debugging"
+  ],
+  "author": "Puppeteer Debugger Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/long369486562/puppeteer-debugger.git"
+  },
+  "homepage": "https://github.com/long369486562/puppeteer-debugger#readme",
+  "bugs": {
+    "url": "https://github.com/long369486562/puppeteer-debugger/issues"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "dependencies": {
+    "puppeteer-core": "^21.0.0",
+    "ws": "^8.13.0"
+  },
+  "devDependencies": {
+    "jest": "^29.5.0"
+  }
+}
