@@ -1,4 +1,4 @@
-const puppeteer = require('puppeteer-core');
+const puppeteer = require("puppeteer-core");
 
 class CDPManager {
   constructor() {
@@ -11,25 +11,27 @@ class CDPManager {
     try {
       this.browser = await puppeteer.connect({
         browserURL: `http://localhost:${port}`,
-        defaultViewport: null
+        defaultViewport: null,
       });
 
       const version = await this.browser.version();
       console.log(`Connected to Chrome ${version}`);
 
       // 监听目标创建和销毁
-      this.browser.on('targetcreated', (target) => {
+      this.browser.on("targetcreated", (target) => {
         console.log(`Target created: ${target.url()}`);
       });
 
-      this.browser.on('targetdestroyed', (target) => {
+      this.browser.on("targetdestroyed", (target) => {
         console.log(`Target destroyed: ${target.url()}`);
         this.pages.delete(target._targetId);
       });
 
       return version;
     } catch (error) {
-      throw new Error(`Failed to connect to Chrome on port ${port}: ${error.message}`);
+      throw new Error(
+        `Failed to connect to Chrome on port ${port}: ${error.message}`,
+      );
     }
   }
 
@@ -38,26 +40,30 @@ class CDPManager {
       await this.browser.disconnect();
       this.browser = null;
       this.pages.clear();
-      console.log('Disconnected from Chrome');
+      console.log("Disconnected from Chrome");
     }
   }
 
   async getTargets() {
     if (!this.browser) {
-      throw new Error('Not connected to Chrome');
+      throw new Error("Not connected to Chrome");
     }
 
     const targets = [];
     for (const target of this.browser.targets()) {
-      if (target.type() === 'page') {
+      if (target.type() === "page") {
         const url = target.url();
         // 只返回真正的网页页面，过滤掉开发者工具等系统页面
         // 允许http/https协议和about:blank空白页
-        if (url.startsWith('http://') || url.startsWith('https://') || url === 'about:blank') {
+        if (
+          url.startsWith("http://") ||
+          url.startsWith("https://") ||
+          url === "about:blank"
+        ) {
           targets.push({
             targetId: target._targetId,
             url: url,
-            title: await this.getPageTitle(target)
+            title: await this.getPageTitle(target),
           });
         }
       }
@@ -70,13 +76,13 @@ class CDPManager {
       const page = await target.page();
       return await page.title();
     } catch {
-      return 'Untitled';
+      return "Untitled";
     }
   }
 
-  async createTarget(url = 'about:blank') {
+  async createTarget(url = "about:blank") {
     if (!this.browser) {
-      throw new Error('Not connected to Chrome');
+      throw new Error("Not connected to Chrome");
     }
 
     const page = await this.browser.newPage();
@@ -91,13 +97,13 @@ class CDPManager {
     return {
       targetId: target._targetId,
       url: url,
-      title: await page.title()
+      title: await page.title(),
     };
   }
 
   async closeTarget(targetId) {
     if (!this.browser) {
-      throw new Error('Not connected to Chrome');
+      throw new Error("Not connected to Chrome");
     }
 
     const page = this.pages.get(targetId);
@@ -107,25 +113,25 @@ class CDPManager {
     } else {
       // 尝试通过browser关闭
       const targets = this.browser.targets();
-      const target = targets.find(t => t._targetId === targetId);
+      const target = targets.find((t) => t._targetId === targetId);
       if (target) {
-        await target.page().then(page => page.close());
+        await target.page().then((page) => page.close());
       }
     }
   }
 
   async evaluateCode(targetId, code) {
     if (!this.browser) {
-      throw new Error('Not connected to Chrome');
+      throw new Error("Not connected to Chrome");
     }
 
     let page = this.pages.get(targetId);
     if (!page) {
       // 尝试获取页面
       const targets = this.browser.targets();
-      const target = targets.find(t => t._targetId === targetId);
+      const target = targets.find((t) => t._targetId === targetId);
       if (!target) {
-        throw new Error('Page not found');
+        throw new Error("Page not found");
       }
       page = await target.page();
       this.pages.set(targetId, page);
@@ -135,11 +141,20 @@ class CDPManager {
     this.setupConsoleListener(page, targetId);
 
     // === 代码执行环境分析 ===
-    const puppeteerApis = ['page\\.', 'browser\\.', '\\bpage\\s*=', '\\bbrowser\\s*='];
-    const isPuppeteerCode = puppeteerApis.some(api => new RegExp(api).test(code));
+    const puppeteerApis = [
+      "page\\.",
+      "browser\\.",
+      "\\bpage\\s*=",
+      "\\bbrowser\\s*=",
+    ];
+    const isPuppeteerCode = puppeteerApis.some((api) =>
+      new RegExp(api).test(code),
+    );
     const hasAsync = /\b(await|async)\b/.test(code);
 
-    console.log(`Code execution analysis: Puppeteer=${isPuppeteerCode}, Async=${hasAsync}`);
+    console.log(
+      `Code execution analysis: Puppeteer=${isPuppeteerCode}, Async=${hasAsync}`,
+    );
 
     try {
       if (isPuppeteerCode) {
@@ -156,10 +171,10 @@ class CDPManager {
 
   setupConsoleListener(page, targetId) {
     // 移除现有的监听器（如果有）
-    page.removeAllListeners('console');
+    page.removeAllListeners("console");
 
     // 设置console监听器
-    page.on('console', async (msg) => {
+    page.on("console", async (msg) => {
       if (this.consoleCallback) {
         try {
           const args = [];
@@ -170,18 +185,18 @@ class CDPManager {
                 args.push(await arg.jsonValue().catch(() => arg.toString()));
               }
             } catch (e) {
-              args.push('[object]');
+              args.push("[object]");
             }
           }
 
           // 发送到前端
           this.consoleCallback({
-            level: msg.type() || 'log',
+            level: msg.type() || "log",
             text: msg.text(),
-            args: args
+            args: args,
           });
         } catch (error) {
-          console.error('Error processing console message:', error);
+          console.error("Error processing console message:", error);
         }
       }
     });
@@ -195,7 +210,7 @@ class CDPManager {
     let page = this.pages.get(targetId);
     if (!page) {
       const targets = this.browser.targets();
-      const target = targets.find(t => t._targetId === targetId);
+      const target = targets.find((t) => t._targetId === targetId);
       if (target) {
         page = await target.page();
         this.pages.set(targetId, page);
@@ -208,64 +223,53 @@ class CDPManager {
    * 在Node.js环境中执行Puppeteer代码
    */
   async executePuppeteerCode(code, page) {
-    console.log('🔧 Executing Puppeteer code in Node.js environment');
+    console.log("🔧 Executing Puppeteer code via Blob ESM runtime");
 
     const logs = [];
-    const originalConsoleLog = console.log;
-    const originalConsoleInfo = console.info;
-    const originalConsoleWarn = console.warn;
-    const originalConsoleError = console.error;
 
-    // 重写Node.js的console方法来捕获输出
-    console.log = (...args) => {
-      logs.push({ level: 'log', args: args.map(arg => String(arg)) });
-      originalConsoleLog.apply(console, args);
-    };
-
-    console.info = (...args) => {
-      logs.push({ level: 'info', args: args.map(arg => String(arg)) });
-      originalConsoleInfo.apply(console, args);
-    };
-
-    console.warn = (...args) => {
-      logs.push({ level: 'warn', args: args.map(arg => String(arg)) });
-      originalConsoleWarn.apply(console, args);
-    };
-
-    console.error = (...args) => {
-      logs.push({ level: 'error', args: args.map(arg => String(arg)) });
-      originalConsoleError.apply(console, args);
+    const logger = {
+      log: (...a) => logs.push({ level: "log", args: a.map(String) }),
+      info: (...a) => logs.push({ level: "info", args: a.map(String) }),
+      warn: (...a) => logs.push({ level: "warn", args: a.map(String) }),
+      error: (...a) => logs.push({ level: "error", args: a.map(String) }),
     };
 
     try {
-      const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
-      const fn = new AsyncFunction('page', 'browser', code);
-      const result = await fn(page, this.browser);
+      const wrapped = `
+export default async function run({ page, browser, console }) {
+${code}
+}
+`;
 
-      // 过滤Chrome内部日志
-      const filteredLogs = logs.filter(log => {
-        const message = log.args.join(' ');
-        return !message.includes('onbeforeunload save spyCache') &&
-               !message.includes('Extension context invalidated') &&
-               !message.includes('chrome-extension://') &&
-               !message.startsWith('DevTools') &&
-               !message.includes('webNavigation');
+      const base64 = Buffer.from(wrapped).toString("base64");
+
+      const url = `data:text/javascript;base64,${base64}`;
+
+      const mod = await import(url);
+
+      const result = await mod.default({
+        page,
+        browser: this.browser,
+        console: logger,
+      });
+
+      // ================================
+      // 6. 过滤日志
+      // ================================
+      const filteredLogs = logs.filter((log) => {
+        const m = log.args.join(" ");
+        return (
+          !m.includes("onbeforeunload save spyCache") &&
+          !m.includes("Extension context invalidated") &&
+          !m.includes("chrome-extension://") &&
+          !m.startsWith("DevTools") &&
+          !m.includes("webNavigation")
+        );
       });
 
       return { result, logs: filteredLogs };
     } catch (error) {
-      // 恢复原始console方法
-      console.log = originalConsoleLog;
-      console.info = originalConsoleInfo;
-      console.warn = originalConsoleWarn;
-      console.error = originalConsoleError;
       throw new Error(`Puppeteer execution error: ${error.message}`);
-    } finally {
-      // 恢复原始console方法
-      console.log = originalConsoleLog;
-      console.info = originalConsoleInfo;
-      console.warn = originalConsoleWarn;
-      console.error = originalConsoleError;
     }
   }
 
@@ -273,11 +277,14 @@ class CDPManager {
    * 在浏览器环境中执行JavaScript代码
    */
   async executeBrowserCode(code, page, hasAsync) {
-    console.log(`🔧 Executing browser code (${hasAsync ? 'async' : 'sync'})`);
-
-    if (hasAsync) {
-      // 异步浏览器代码
-      const result = await page.evaluate(`(async () => {
+    console.log(`🔧 Executing browser code (${hasAsync ? "async" : "sync"})`);
+    const wrapper = hasAsync ? "async " : "";
+    console.log(code);
+    const runCode = hasAsync
+      ? `await (async () => {${code}})();`
+      : `(() => {${code}})();`;
+    // 同步浏览器代码
+    const result = await page.evaluate(`(${wrapper}() => {
         const originalConsoleLog = console.log;
         const originalConsoleInfo = console.info;
         const originalConsoleWarn = console.warn;
@@ -306,59 +313,7 @@ class CDPManager {
         };
 
         try {
-          ${code}
-        } catch (error) {
-          logs.push({ level: 'error', args: ['Execution error: ' + error.message] });
-        }
-
-        return logs;
-      })()`);
-
-      // 过滤Chrome内部日志
-      const filteredLogs = result.filter(log => {
-        const message = log.args.join(' ');
-        return !message.includes('onbeforeunload save spyCache') &&
-               !message.includes('Extension context invalidated') &&
-               !message.includes('chrome-extension://') &&
-               !message.startsWith('DevTools') &&
-               !message.includes('webNavigation');
-      });
-
-      return { result: undefined, logs: filteredLogs };
-    } else {
-      // 同步浏览器代码
-      const result = await page.evaluate(`(() => {
-        const originalConsoleLog = console.log;
-        const originalConsoleInfo = console.info;
-        const originalConsoleWarn = console.warn;
-        const originalConsoleError = console.error;
-
-        const logs = [];
-
-        console.log = (...args) => {
-          logs.push({ level: 'log', args: args.map(arg => String(arg)) });
-          originalConsoleLog.apply(console, args);
-        };
-
-        console.info = (...args) => {
-          logs.push({ level: 'info', args: args.map(arg => String(arg)) });
-          originalConsoleInfo.apply(console, args);
-        };
-
-        console.warn = (...args) => {
-          logs.push({ level: 'warn', args: args.map(arg => String(arg)) });
-          originalConsoleWarn.apply(console, args);
-        };
-
-        console.error = (...args) => {
-          logs.push({ level: 'error', args: args.map(arg => String(arg)) });
-          originalConsoleError.apply(console, args);
-        };
-
-        try {
-          const userResult = (() => {
-            ${code}
-          })();
+          const userResult = ${runCode}
           return { result: userResult, logs: logs };
         } catch (error) {
           logs.push({ level: 'error', args: ['Execution error: ' + error.message] });
@@ -366,21 +321,22 @@ class CDPManager {
         }
       })()`);
 
-      // 过滤Chrome内部日志
-      const filteredLogs = (result ? result.logs : []).filter(log => {
-        const message = log.args.join(' ');
-        return !message.includes('onbeforeunload save spyCache') &&
-               !message.includes('Extension context invalidated') &&
-               !message.includes('chrome-extension://') &&
-               !message.startsWith('DevTools') &&
-               !message.includes('webNavigation');
-      });
+    // 过滤Chrome内部日志
+    const filteredLogs = (result ? result.logs : []).filter((log) => {
+      const message = log.args.join(" ");
+      return (
+        !message.includes("onbeforeunload save spyCache") &&
+        !message.includes("Extension context invalidated") &&
+        !message.includes("chrome-extension://") &&
+        !message.startsWith("DevTools") &&
+        !message.includes("webNavigation")
+      );
+    });
 
-      return {
-        result: result ? result.result : undefined,
-        logs: filteredLogs
-      };
-    }
+    return {
+      result: result ? result.result : undefined,
+      logs: filteredLogs,
+    };
   }
 }
 
