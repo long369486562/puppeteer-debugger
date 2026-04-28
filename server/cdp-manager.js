@@ -50,11 +50,16 @@ class CDPManager {
     const targets = [];
     for (const target of this.browser.targets()) {
       if (target.type() === 'page') {
-        targets.push({
-          targetId: target._targetId,
-          url: target.url(),
-          title: await this.getPageTitle(target)
-        });
+        const url = target.url();
+        // 只返回真正的网页页面，过滤掉开发者工具等系统页面
+        // 允许http/https协议和about:blank空白页
+        if (url.startsWith('http://') || url.startsWith('https://') || url === 'about:blank') {
+          targets.push({
+            targetId: target._targetId,
+            url: url,
+            title: await this.getPageTitle(target)
+          });
+        }
       }
     }
     return targets;
