@@ -4,9 +4,9 @@
   "description": "A modern web UI debugger for Chrome DevTools Protocol with dual-mode JavaScript execution",
   "main": "server/index.js",
   "scripts": {
-    "start": "node server/index.js",
-    "dev": "node server/index.js",
-    "test": "node tests/integration.test.js"
+    "start": "bun run src/server/index.ts",
+    "dev": "bun run --watch src/server/index.ts",
+    "tscheck": "bunx tsc --noEmit"
   },
   "keywords": [
     "puppeteer",
@@ -29,13 +29,14 @@
     "url": "https://github.com/long369486562/puppeteer-debugger/issues"
   },
   "engines": {
-    "node": ">=14.0.0"
+    "bun": "^1.0.0"
   },
   "dependencies": {
-    "puppeteer-core": "^21.0.0",
-    "ws": "^8.13.0"
+    "puppeteer-core": "^21.11.0",
+    "ws": "^8.20.0"
   },
   "devDependencies": {
-    "jest": "^29.5.0"
+    "typescript": "^5.9.3",
+    "@types/ws": "^8.18.1"
   }
 }
