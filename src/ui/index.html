@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Puppeteer Debugger</title>
+  <link data-rh="true" rel="icon" href="favicon.ico">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -13,8 +14,8 @@
         <div class="header-left">
           <h1>Puppeteer Debugger</h1>
           <div class="pages-controls">
-            <button id="refreshBtn" class="btn btn-sm btn-secondary" title="刷新页面列表">⟳</button>
-            <button id="newPageBtn" class="btn btn-sm btn-success" title="新建页面">➕</button>
+             <button id="refreshBtn" class="btn btn-sm action-btn" title="刷新页面列表">⟳</button>
+             <button id="newPageBtn" class="btn btn-sm action-btn" title="新建页面">➕</button>
           </div>
         </div>
         <div class="connection-panel">
@@ -37,31 +38,47 @@
       <!-- 代码执行 -->
       <section class="code-section">
         <div class="section-header">
-          <h2>代码执行</h2>
-          <button id="runBtn" class="btn btn-primary" disabled>执行</button>
+          <h2>代码执行<span id="langDisplay" class="lang-display">(JS)</span></h2>
+           <button id="runBtn" class="btn action-btn" disabled>执行</button>
         </div>
-        <textarea id="codeInput" placeholder="输入JavaScript代码...&#10;&#10;// 浏览器代码: console.log('Hello World'); window.location.href = 'https://www.baidu.com'&#10;// Puppeteer代码: await page.goto('https://www.baidu.com', { waitUntil: 'domcontentloaded' })&#10;&#10;// Ctrl+Enter 快速执行"></textarea>
+         <textarea id="codeInput">// 浏览器环境代码 - 在页面中执行
+console.log('Hello from the page!');
+
+// 获取页面标题
+console.log('Page title:', document.title);
+console.log('Page URL:', window.location.href);
+
+// Puppeteer环境代码 - 在Node中执行
+await page.goto('https://example.com', { waitUntil: 'domcontentloaded' });
+await page.screenshot({ path: 'screenshot.png' });
+
+// TypeScript示例 (支持类型注解)
+const links: NodeList = document.querySelectorAll('a');
+console.log('Found', links.length, 'links');
+
+// 元数据指令: 指定项目根目录以支持相对路径import  异步代码
+// @projectRoot D:\Personal\Desktop\collector_web\collector\src\platforms\instagram
+import { InstagramDiscoverFans } from './discover-related-fans';
+await (new InstagramDiscoverFans()).analyzeFollowers(page) 
+</textarea>
       </section>
 
-      <!-- 执行结果 -->
-      <section class="results-section">
-        <div class="section-header">
-          <h2>执行结果</h2>
-        </div>
-        <div id="result" class="result-area">
-          <p class="placeholder">执行结果将显示在这里</p>
-        </div>
-      </section>
+       <!-- 执行结果 -->
+       <section class="results-section">
+         <div class="section-header">
+           <h2>执行结果</h2>
+           <button id="copyResultBtn" class="btn action-btn" title="复制结果" disabled>复制</button>
+         </div>
+         <div id="result" class="result-area" style="overflow-y: scroll;"><p class="placeholder">执行结果将显示在这里</p></div>
+       </section>
 
       <!-- 控制台输出 -->
       <section class="console-section">
         <div class="section-header">
           <h2>控制台输出</h2>
-          <button id="clearConsoleBtn" class="btn btn-sm btn-secondary">清空</button>
+           <button id="clearConsoleBtn" class="btn action-btn" disabled>清空</button>
         </div>
-        <div id="console" class="console-area">
-          <p class="placeholder">控制台消息将显示在这里</p>
-        </div>
+        <div id="console" class="console-area" style="overflow-y: scroll;"><p class="placeholder">控制台消息将显示在这里</p></div>
       </section>
     </main>
   </div>

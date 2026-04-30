@@ -1,5 +1,6 @@
 import puppeteer from 'puppeteer-core';
 import type { Browser, Page, Target } from 'puppeteer-core';
+import { CodePreprocessor } from './code-preprocessor';
 declare module "puppeteer-core" {
   interface Target {
     _targetId: string;
@@ -19,10 +20,6 @@ interface ConsoleMessage {
 
 interface CodeExecutionResult {
   result: any;
-  logs: Array<{
-    level: string;
-    args: string[];
-  }>;
 }
 
 class CDPManager {
@@ -48,11 +45,11 @@ class CDPManager {
 
       // Listen for target creation and destruction
       this.browser.on('targetcreated', (target) => {
-        console.log(`Target created: ${target.url()}`);
+        // console.log(`Target created: ${target.url()}`);
       });
 
       this.browser.on('targetdestroyed', (target) => {
-        console.log(`Target destroyed: ${target.url()}`);
+        // console.log(`Target destroyed: ${target.url()}`);
 
         this.pages.delete(target._targetId);
       });
@@ -121,9 +118,6 @@ class CDPManager {
     const target = page.target();
     this.pages.set(target._targetId, page);
 
-    // Set up console listener
-    this.setupConsoleListener(page, target._targetId);
-
     return {
       targetId: target._targetId,
       url: url,
@@ -156,6 +150,7 @@ class CDPManager {
   async evaluateCode(
     targetId: string,
     code: string,
+    lang: "js" | "ts"
   ): Promise<CodeExecutionResult> {
     if (!this.browser) {
       throw new Error('Not connected to Chrome');
@@ -173,74 +168,8 @@ class CDPManager {
       this.pages.set(targetId, page);
     }
 
-    // Ensure console listener is set up
-    this.setupConsoleListener(page, targetId);
-
-    // === Code execution environment analysis ===
-    const puppeteerApis = [
-      'page\\.',
-      'browser\\.',
-      '\\bpage\\s*=',
-      '\\bbrowser\\s*=',
-    ];
-    const isPuppeteerCode = puppeteerApis.some((api) =>
-      new RegExp(api).test(code),
-    );
-    const hasAsync = /\b(await|async)\b/.test(code);
-
-    console.log(
-      `Code execution analysis: Puppeteer=${isPuppeteerCode}, Async=${hasAsync}`,
-    );
-
-    try {
-      if (isPuppeteerCode) {
-        // === Node.js environment: Execute Puppeteer code ===
-        return await this.executePuppeteerCode(code, page);
-      } else {
-        // === Browser environment: Execute JavaScript code ===
-        return await this.executeBrowserCode(code, page, hasAsync);
-      }
-    } catch (error: any) {
-      throw new Error(`Evaluation error: ${error.message}`);
-    }
-  }
-
-  public setupConsoleListener(
-    page: Page,
-    targetId: string,
-  ): void {
-    // Remove existing listeners (if any)
-    page.removeAllListeners('console');
-
-    // Set up console listener
-    page.on('console', async (msg) => {
-      if (this.consoleCallback) {
-        try {
-          const args: any[] = [];
-          for (let i = 0; i < msg.args().length; i++) {
-            try {
-              const arg = msg.args()[i];
-              if (arg) {
-                args.push(
-                  await arg.jsonValue().catch(() => arg.toString()),
-                );
-              }
-            } catch (e) {
-              args.push('[object]');
-            }
-          }
-
-          // Send to frontend
-          this.consoleCallback!({
-            level: msg.type() || 'log',
-            text: msg.text(),
-            args: args,
-          });
-        } catch (error) {
-          console.error('Error processing console message:', error);
-        }
-      }
-    });
+    // === Node.js environment: Execute Puppeteer code ===
+    return await this.executeCode(code, page, lang);
   }
 
   onConsole(callback: (message: ConsoleMessage) => void): void {
@@ -263,138 +192,51 @@ class CDPManager {
   }
 
   /**
-   * Execute Puppeteer code in Node.js environment
+   * Execute code in Node.js environment
    */
-  private async executePuppeteerCode(
+  private async executeCode(
     code: string,
     page: Page,
+    lang: "js" | "ts"
   ): Promise<CodeExecutionResult> {
-    console.log('🔧 Executing Puppeteer code via Blob ESM runtime');
+    // console.log('🔧 Executing code via Blob ESM runtime');
+    if (!(page as any).__emitLogExposed) {
+      const emit = (level: string, a: any[]) => {
+        const args = a.map(String);
+        if (this.consoleCallback) {
+          this.consoleCallback({ level, text: args.join(' '), args });
+        }
+      };
+      await page.exposeFunction("emitLog", emit);
+      (page as any).__emitLogExposed = true;
+    }
 
-    const logs: Array<{ level: string; args: string[] }> = [];
+    const emitForLogger = (level: string, a: any[]) => {
+      const args = a.map(String);
+      if (this.consoleCallback) {
+        this.consoleCallback({ level, text: args.join(' '), args });
+      }
+    };
 
     const logger = {
-      log: (...a: any[]) =>
-        logs.push({ level: 'log', args: a.map(String) }),
-      info: (...a: any[]) =>
-        logs.push({ level: 'info', args: a.map(String) }),
-      warn: (...a: any[]) =>
-        logs.push({ level: 'warn', args: a.map(String) }),
-      error: (...a: any[]) =>
-        logs.push({ level: 'error', args: a.map(String) }),
+      log: (...a: any[]) => emitForLogger('log', a),
+      info: (...a: any[]) => emitForLogger('info', a),
+      warn: (...a: any[]) => emitForLogger('warn', a),
+      error: (...a: any[]) => emitForLogger('error', a),
+      debug: (...a: any[]) => emitForLogger('debug', a),
     };
 
     try {
-      const wrapped = `
-export default async function run({ page, browser, console }) {
-${code}
-}
-`;
+      const Code_Prepro = await new CodePreprocessor().build({ code, lang })
 
-      const base64 = Buffer.from(wrapped).toString('base64');
+      const mod = await import(`${Code_Prepro.entryFileUrl}?t=${Date.now()}`);
 
-      const url = `data:text/javascript;base64,${base64}`;
-
-      const mod = await import(url);
-
-      const result = await mod.default({
-        page,
-        browser: this.browser,
-        console: logger,
-      });
-
-      // ================================
-      // 6. Filter logs
-      // ================================
-      const filteredLogs = logs.filter((log) => {
-        const m = log.args.join(' ');
-        return (
-          !m.includes('onbeforeunload save spyCache') &&
-          !m.includes('Extension context invalidated') &&
-          !m.includes('chrome-extension://') &&
-          !m.startsWith('DevTools') &&
-          !m.includes('webNavigation')
-        );
-      });
-
-      return { result, logs: filteredLogs };
+      const result = await mod.default(page, this.browser, logger);
+      await new CodePreprocessor().deleteFile()
+      return { result };
     } catch (error: any) {
       throw new Error(`Puppeteer execution error: ${error.message}`);
     }
-  }
-
-  /**
-   * Execute JavaScript code in browser environment
-   */
-  private async executeBrowserCode(
-    code: string,
-    page: Page,
-    hasAsync: boolean,
-  ): Promise<CodeExecutionResult> {
-    console.log(
-      `🔧 Executing browser code (${hasAsync ? 'async' : 'sync'})`,
-    );
-    const wrapper = hasAsync ? 'async ' : '';
-    console.log(code);
-    const runCode = hasAsync
-      ? `await (async () => {${code}})();`
-      : `(() => {${code}})();`;
-
-    const result= await page.evaluate(
-      `(${wrapper}() => {
-        const originalConsoleLog = console.log;
-        const originalConsoleInfo = console.info;
-        const originalConsoleWarn = console.warn;
-        const originalConsoleError = console.error;
-
-        const logs: Array<{ level: string; args: string[] }> = [];
-
-        console.log = (...args: any[]) => {
-          logs.push({ level: 'log', args: args.map(arg => String(arg)) });
-          originalConsoleLog.apply(console, args);
-        };
-
-        console.info = (...args: any[]) => {
-          logs.push({ level: 'info', args: args.map(arg => String(arg)) });
-          originalConsoleInfo.apply(console, args);
-        };
-
-        console.warn = (...args: any[]) => {
-          logs.push({ level: 'warn', args: args.map(arg => String(arg)) });
-          originalConsoleWarn.apply(console, args);
-        };
-
-        console.error = (...args: any[]) => {
-          logs.push({ level: 'error', args: args.map(arg => String(arg)) });
-          originalConsoleError.apply(console, args);
-        };
-
-        try {
-          const userResult = ${runCode};
-          return { result: userResult, logs: logs };
-        } catch (error: any) {
-          logs.push({ level: 'error', args: ['Execution error: ' + error.message] });
-          return { result: undefined, logs: logs };
-        }
-      })()`,
-    ) as CodeExecutionResult;
-
-    // Filter Chrome internal logs
-    const filteredLogs = (result ? result.logs! : []).filter((log: { level: string; args: string[] }) => {
-      const message = log.args.join(' ');
-      return (
-        !message.includes('onbeforeunload save spyCache') &&
-        !message.includes('Extension context invalidated') &&
-        !message.includes('chrome-extension://') &&
-        !message.startsWith('DevTools') &&
-        !message.includes('webNavigation')
-      );
-    });
-
-    return {
-      result: result ? result.result! : undefined,
-      logs: filteredLogs,
-    };
   }
 }
 

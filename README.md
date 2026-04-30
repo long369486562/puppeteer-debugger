@@ -2,13 +2,13 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-一个现代化的Web UI调试工具，用于连接Chrome DevTools Protocol (CDP)并实时执行JavaScript代码。支持两种代码执行模式：浏览器上下文和Puppeteer API。
+一个现代化的Web UI调试工具，用于连接Chrome DevTools Protocol (CDP)并实时执行JavaScript/TypeScript代码。支持两种代码执行模式：浏览器上下文和Puppeteer API，所有代码均生成临时ES模块由Bun直接执行，支持import引用项目模块。
 
 ## ✨ 功能特性
 
 - 🔗 **CDP连接**: 连接到运行中的Chrome实例
 - 📄 **页面管理**: 查看、创建、切换浏览器页面
-- 💻 **双模式执行**: 支持浏览器JS和Puppeteer API
+- 💻 **双模式执行**: 支持浏览器JS/TS和Puppeteer API，代码自动生成临时ES模块由Bun执行
 - 📝 **实时输出**: 显示执行结果和控制台日志
 - 🎨 **现代化UI**: 响应式设计，简洁美观
 - ⚡ **高性能**: WebSocket实时通信，毫秒级响应
@@ -18,13 +18,13 @@
 ### 安装依赖
 
 ```bash
-npm install
+bun install
 ```
 
 ### 启动调试器
 
 ```bash
-npm start
+bun start
 ```
 
 服务器将在 http://localhost:9000 启动。
@@ -42,10 +42,14 @@ npm start
 4. 点击"连接"按钮
 5. 开始调试！
 
+- 🔤 **多语言支持**: 自动识别JavaScript/TypeScript，支持`@projectRoot`指令引用项目模块
+
 ## 📖 代码执行模式
 
+所有代码均由代码预处理器（`code-preprocessor.ts`）自动分析，生成临时ES模块文件后由Bun运行时直接执行。
+
 ### 🖥️ 浏览器上下文代码
-在页面中执行原生JavaScript，访问浏览器API：
+在页面中执行原生JavaScript/TypeScript，访问浏览器API：
 
 ```javascript
 // 页面导航
@@ -84,26 +88,42 @@ const url = page.url();
 console.log("Page:", title, url);
 ```
 
-## 🏗️ 架构
+### 📂 @projectRoot 指令
+
+通过在代码首行添加 `// @projectRoot <项目路径>` 指令，可以直接 import 开发中的项目文件进行实时测试，无需构建或发布：
+
+```javascript
+// @projectRoot D:/my-project/src
+import { myFunction } from './utils/helper';
+import { UserAPI } from './api/user';
+
+// 直接调用开发中的代码，修改源码后重新执行即可验证
+const result = await myFunction('test');
+console.log(result);
+```
+
+预处理器会自动将 `./utils/helper` 等相对路径重写为绝对 `file://` URL，使 Bun 运行时能正确解析项目模块。
+
+
 
 ```
 ┌─────────────┐    WebSocket    ┌─────────────┐    CDP    ┌─────────────┐
-│   Web UI    │◄──────────────►│ Node Server │◄────────►│   Chrome    │
+│   Web UI    │◄──────────────►│ Bun Server  │◄────────►│   Chrome    │
 │             │   JSON消息       │             │           │   Browser   │
 └─────────────┘                 └─────────────┘           └─────────────┘
 ```
 
 - **前端**: 原生HTML/CSS/JavaScript，无框架依赖
-- **后端**: Node.js + puppeteer-core + ws
+- **后端**: Bun + TypeScript + puppeteer-core + ws
 - **通信**: WebSocket + JSON-RPC风格消息协议
 - **调试**: Chrome DevTools Protocol (CDP)
 
 ## ⚙️ 配置
 
-编辑 `config.js` 文件自定义设置：
+编辑 `src/config.ts` 文件自定义设置：
 
-```javascript
-module.exports = {
+```typescript
+const config = {
   server: {
     port: 9000,      // Web服务器端口
     host: 'localhost'
@@ -112,37 +132,44 @@ module.exports = {
     defaultPort: 9555  // Chrome调试端口
   }
 };
+
+export default config;
 ```
 
 ## 📁 项目结构
 
 ```
 puppeteerDebugger/
-├── config.js              # 配置文件
-├── package.json           # 项目依赖
-├── README.md             # 文档
-├── server/
-│   ├── index.js          # WebSocket服务器主文件
-│   └── cdp-manager.js    # CDP连接管理器
-├── ui/
-│   ├── index.html        # 主页面HTML
-│   ├── style.css         # 样式文件
-│   └── app.js            # 前端交互逻辑
-└── tests/
-    └── integration.test.js # 集成测试
+├── package.json              # 项目依赖
+├── tsconfig.json             # TypeScript配置
+├── README.md                 # 文档
+├── src/
+│   ├── config.ts             # 配置文件
+│   ├── server/
+│   │   ├── index.ts          # WebSocket服务器主文件
+│   │   ├── cdp-manager.ts    # CDP连接管理器
+│   │   └── code-preprocessor.ts  # 代码预处理器
+│   └── ui/
+│       ├── index.html        # 主页面HTML
+│       ├── style.css         # 样式文件
+│       └── app.js            # 前端交互逻辑
+└── 显式启动.vbs              # Windows快捷启动脚本
 ```
 
 ## 🔧 开发
 
 ```bash
 # 安装依赖
-npm install
+bun install
 
 # 启动开发服务器
-npm start
+bun run dev
 
-# 运行测试
-npm test
+# 启动生产服务器
+bun start
+
+# 类型检查
+bun run tscheck
 ```
 
 ## 📋 通信协议
@@ -156,7 +183,7 @@ npm test
 {"type": "createPage"}
 {"type": "selectPage", "pageId": "targetId"}
 {"type": "closePage", "pageId": "targetId"}
-{"type": "eval", "code": "console.log('hello')"}
+{"type": "eval", "code": "console.log('hello')", "lang": "js"}
 ```
 
 ### 服务器 → 客户端
@@ -186,12 +213,12 @@ npm test
 
 2. 安装依赖
    ```bash
-   npm install
+   bun install
    ```
 
 3. 启动开发服务器
    ```bash
-   npm start
+   bun start
    ```
 
 4. 打开 http://localhost:9000 开始开发
@@ -212,7 +239,7 @@ npm test
 
 - [Puppeteer](https://pptr.dev/) - 浏览器自动化框架
 - [Chrome DevTools Protocol](https://chromedevtools.github.io/devtools-protocol/) - 调试协议
-- [ws](https://github.com/websockets/ws) - WebSocket库
+- [Bun](https://bun.sh/) - JavaScript运行时
 
 ---
 

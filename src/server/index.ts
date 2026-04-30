@@ -173,7 +173,7 @@ class PuppeteerDebugger {
           await this.handleClosePage(ws, message.pageId);
           break;
         case 'eval':
-          await this.handleEval(ws, message.code);
+          await this.handleEval(ws, message.code, message.lang);
           break;
         default:
           ws.send(
@@ -309,9 +309,6 @@ class PuppeteerDebugger {
 
       // Ensure console listener is set up
       const page = await this.cdpManager.getPageById(pageId);
-      if (page) {
-        this.cdpManager.setupConsoleListener(page, pageId);
-      }
 
       ws.send(
         JSON.stringify({
@@ -359,13 +356,13 @@ class PuppeteerDebugger {
     }
   }
 
-  private async handleEval(ws: WebSocket, code: string): Promise<void> {
+  private async handleEval(ws: WebSocket, code: string, lang?: string): Promise<void> {
     try {
       if (!this.currentTargetId) {
         throw new Error('No page selected');
       }
 
-      const result = await this.cdpManager.evaluateCode(this.currentTargetId, code);
+      const result = await this.cdpManager.evaluateCode(this.currentTargetId, code, (lang || 'js') as 'js'|'ts');
 
       // Handle async result (if it's a Promise, wait for it)
       const finalResult =
@@ -380,19 +377,7 @@ class PuppeteerDebugger {
         }),
       );
 
-      // If there are captured console logs, send them one by one
-      if (finalResult.logs && finalResult.logs.length > 0) {
-        finalResult.logs.forEach((log: ConsoleMessage) => {
-          ws.send(
-            JSON.stringify({
-              type: 'console',
-              level: log.level,
-              text: log.args.join(' '),
-              args: log.args,
-            }),
-          );
-        });
-      }
+
     } catch (error: any) {
       ws.send(
         JSON.stringify({
@@ -405,7 +390,7 @@ class PuppeteerDebugger {
 
   private formatResult(result: any): any {
     if (result === null || result === undefined) {
-      return String(result);
+      return String("");
     }
 
     if (typeof result === 'object') {
