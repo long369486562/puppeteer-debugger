@@ -32,6 +32,7 @@
     "bun": "^1.0.0"
   },
   "dependencies": {
+    "jiti": "^2.7.0",
     "puppeteer-core": "^21.11.0",
     "ws": "^8.20.0"
   },

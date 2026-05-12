@@ -1,6 +1,7 @@
 import puppeteer from 'puppeteer-core';
 import type { Browser, Page, Target } from 'puppeteer-core';
 import { CodePreprocessor } from './code-preprocessor';
+import { createJiti, type Jiti } from "jiti";
 declare module "puppeteer-core" {
   interface Target {
     _targetId: string;
@@ -25,11 +26,17 @@ interface CodeExecutionResult {
 class CDPManager {
   private browser: Browser | null;
   private pages: Map<string, Page>;
+  private jitimod: Jiti;
   private consoleCallback: ((message: ConsoleMessage) => void) | null;
 
   constructor() {
     this.browser = null;
     this.pages = new Map();
+    this.jitimod = createJiti(import.meta.url, {
+      moduleCache:false,
+      fsCache: false,
+      requireCache: false
+    });
     this.consoleCallback = null;
   }
 
@@ -226,16 +233,18 @@ class CDPManager {
       debug: (...a: any[]) => emitForLogger('debug', a),
     };
 
+    const Code_Prepro = await new CodePreprocessor().build({ code, lang });
+
     try {
-      const Code_Prepro = await new CodePreprocessor().build({ code, lang })
+      const modDefault = await this.jitimod.import(Code_Prepro.entryFileUrl, { default: true }) as any;
 
-      const mod = await import(`${Code_Prepro.entryFileUrl}?t=${Date.now()}`);
+      const result = await modDefault(page, this.browser, logger);
 
-      const result = await mod.default(page, this.browser, logger);
-      await new CodePreprocessor().deleteFile()
       return { result };
     } catch (error: any) {
       throw new Error(`Puppeteer execution error: ${error.message}`);
+    } finally {
+      await new CodePreprocessor().deleteFile();
     }
   }
 }

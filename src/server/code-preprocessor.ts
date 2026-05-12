@@ -7,7 +7,6 @@ import { rm, access } from "fs/promises"
 import { constants } from "fs"
 import { randomBytes } from "crypto"
 
-
 export class CodePreprocessor {
   constructor() { }
 
@@ -246,7 +245,7 @@ export default async function run(page, browser, xxconsole) {
 
     const fileName = `temp-${id}.${ext}`
     const filePath = `${process.cwd()}/temp/${fileName}`;
-    console.log(filePath)
+    // console.log(filePath)
     // 🔥 写入前清理旧文件、
     await this.deleteFile()
     await Bun.write(filePath, code)
